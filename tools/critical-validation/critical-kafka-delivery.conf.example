@@ -1,0 +1,17 @@
+# Overlay for the NEW acknowledged-Kafka build only, not a full collector config.
+# Preserve the current source, topic, whitelist, partition mapping and checkpoint.
+# No settings in this file are applied automatically.
+incr_sync.tunnel.kafka.acknowledged = true
+
+# First release: safe single-record sending. Performance rollback changes ONLY
+# batch.enabled back to false; do not turn acknowledged off.
+incr_sync.tunnel.kafka.batch.enabled = false
+incr_sync.tunnel.kafka.batch.max_messages = 128
+incr_sync.tunnel.kafka.batch.max_bytes = 524288
+incr_sync.tunnel.kafka.batch.flush_ms = 5
+
+# Required existing topology: tunnel=kafka, tunnel.message=json, sync_mode=incr,
+# one Mongo source, oplog fetching, incr_sync.worker=1,
+# incr_sync.tunnel.write_thread=1 and tunnel.kafka.partition_number=1.
+# max_bytes bounds a batch of small records, NOT the single-record limit.
+# A larger supported record is sent alone. Existing JSON format is preserved.

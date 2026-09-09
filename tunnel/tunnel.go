@@ -8,8 +8,8 @@ import (
 
 	"github.com/alibaba/MongoShake/v2/oplog"
 
-	utils "github.com/alibaba/MongoShake/v2/common"
 	conf "github.com/alibaba/MongoShake/v2/collector/configure"
+	utils "github.com/alibaba/MongoShake/v2/common"
 	"github.com/gugemichael/nimo4go"
 	LOG "github.com/vinllen/log4go"
 )
@@ -35,6 +35,7 @@ const (
 	ReplyChecksumInvalid        int64 = -6
 	ReplyCompressorNotSupported int64 = -7
 	ReplyDecompressInvalid            = -8
+	ReplyFenced                 int64 = -9
 )
 
 // WMessage wrapped TMessage
@@ -159,6 +160,9 @@ type WriterFactory struct {
 func (factory *WriterFactory) Create(address []string, workerId uint32) Writer {
 	switch factory.Name {
 	case utils.VarTunnelKafka:
+		if conf.Options.KafkaAcknowledged {
+			return &AcknowledgedKafkaWriter{RemoteAddr: address[0], PartitionId: int(workerId) % conf.Options.TunnelKafkaPartitionNumber}
+		}
 		return &KafkaWriter{
 			RemoteAddr:  address[0],
 			PartitionId: int(workerId) % conf.Options.TunnelKafkaPartitionNumber,

@@ -79,6 +79,10 @@ func (sync *OplogSyncer) loadCheckpoint() error {
  * if inputTs is given(> 0), use this value to update checkpoint, otherwise, calculate from workers.
  */
 func (sync *OplogSyncer) checkpoint(flush bool, inputTs int64) {
+	if conf.Options.KafkaAcknowledged && inputTs > 0 && sync.hasUnacknowledgedWork() {
+		// A filtered tail is not proof that earlier Kafka records were accepted.
+		return
+	}
 	now := time.Now()
 
 	// do checkpoint every once in a while
@@ -144,6 +148,32 @@ func (sync *OplogSyncer) checkpoint(flush bool, inputTs int64) {
 	// this log will be print if no ack calculated
 	LOG.Warn("CheckpointOperation updated is not suitable. lowest [%d]. current [%v]. inputTs [%v]. reason : %v",
 		lowest, utils.ExtractTimestampForLog(inMemoryTs), inputTs, err)
+}
+
+func (sync *OplogSyncer) hasUnacknowledgedWork() bool {
+	for _, worker := range sync.batcher.workerGroup {
+		if atomic.LoadInt64(&worker.pendingKafkaBatches) > 0 {
+			return true
+		}
+		ack := atomic.LoadInt64(&worker.ack)
+		if atomic.LoadInt64(&worker.unack) > ack {
+			return true
+		}
+	}
+	return false
+}
+
+func (sync *OplogSyncer) drainAcknowledgedCheckpoint(newestTs int64) {
+	for sync.hasUnacknowledgedWork() {
+		sync.checkpoint(true, 0)
+		utils.YieldInMs(DDLCheckpointInterval)
+	}
+	// Once all worker records are accepted, advancing over a filtered tail is safe.
+	sync.checkpoint(true, newestTs)
+	for !sync.checkCheckpointUpdate(true, newestTs) {
+		LOG.Warn("acknowledged Kafka shutdown waits for durable checkpoint; do not force-delete this collector")
+		sync.checkpoint(true, newestTs)
+	}
 }
 
 func (sync *OplogSyncer) calculateWorkerLowestCheckpoint() (v int64, err error) {

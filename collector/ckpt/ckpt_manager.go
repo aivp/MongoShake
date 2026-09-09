@@ -86,23 +86,30 @@ func (manager *CheckpointManager) Update(ts int64) error {
 		return errors.New("current ckpt context is empty")
 	}
 
-	manager.ctx.Timestamp = ts
-	manager.ctx.Version = utils.FcvCheckpoint.CurrentVersion
+	// Publish the new in-memory position only after persistence succeeds;
+	// otherwise an unchanged ACK can prevent a failed write from being retried.
+	next := *manager.ctx
+	next.Timestamp = ts
+	next.Version = utils.FcvCheckpoint.CurrentVersion
 
 	// update OplogDiskQueueFinishTs if set
 	if manager.ctxRec != nil {
-		if manager.ctx.OplogDiskQueueFinishTs != manager.ctxRec.OplogDiskQueueFinishTs {
-			manager.ctx.OplogDiskQueueFinishTs = manager.ctxRec.OplogDiskQueueFinishTs
+		if next.OplogDiskQueueFinishTs != manager.ctxRec.OplogDiskQueueFinishTs {
+			next.OplogDiskQueueFinishTs = manager.ctxRec.OplogDiskQueueFinishTs
 		}
-		if manager.ctx.OplogDiskQueue != manager.ctxRec.OplogDiskQueue {
-			manager.ctx.OplogDiskQueue = manager.ctxRec.OplogDiskQueue
+		if next.OplogDiskQueue != manager.ctxRec.OplogDiskQueue {
+			next.OplogDiskQueue = manager.ctxRec.OplogDiskQueue
 		}
-		if manager.ctx.FetchMethod != manager.ctxRec.FetchMethod {
-			manager.ctx.FetchMethod = manager.ctxRec.FetchMethod
+		if next.FetchMethod != manager.ctxRec.FetchMethod {
+			next.FetchMethod = manager.ctxRec.FetchMethod
 		}
 	}
 
-	return manager.delegate.Insert(manager.ctx)
+	if err := manager.delegate.Insert(&next); err != nil {
+		return err
+	}
+	manager.ctx = &next
+	return nil
 }
 
 // OplogDiskQueueFinishTs and OplogDiskQueue won't immediate effect, will be inserted in the next Update call.

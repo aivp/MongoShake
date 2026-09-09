@@ -1,0 +1,7 @@
+# Exact runtime image read from Hangcha domestic critical Pod on 2026-09-09.
+# Local candidate only. Replaces the collector, not Kafka or the receiver.
+FROM aidong-backend.tencentcloudcr.com/aidong/mongoshake@sha256:bc90a9815159ed0dee272381efd59d939910e736727c6da53757a84fa3cfa849
+COPY collector-linux-amd64 /app/collector.linux
+LABEL org.opencontainers.image.title="MongoShake critical acknowledged Kafka candidate" \
+      org.opencontainers.image.revision="9af224464481f877c761963aa4bad71573657269+local-uncommitted" \
+      com.aidong.release-status="local-validation-not-approved-for-production"

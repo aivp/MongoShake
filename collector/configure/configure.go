@@ -71,6 +71,11 @@ type Configuration struct {
 	IncrSyncShardByObjectIdWhiteList      []string `config:"incr_sync.shard_by_object_id_whitelist"`
 	IncrSyncWorker                        int      `config:"incr_sync.worker"`
 	IncrSyncTunnelWriteThread             int      `config:"incr_sync.tunnel.write_thread"` // add v2.4.21
+	KafkaAcknowledged                     bool     `config:"incr_sync.tunnel.kafka.acknowledged"`
+	KafkaBatchEnabled                     bool     `config:"incr_sync.tunnel.kafka.batch.enabled"`
+	KafkaBatchMaxMessages                 int      `config:"incr_sync.tunnel.kafka.batch.max_messages"`
+	KafkaBatchMaxBytes                    int      `config:"incr_sync.tunnel.kafka.batch.max_bytes"`
+	KafkaBatchFlushMS                     int      `config:"incr_sync.tunnel.kafka.batch.flush_ms"`
 	IncrSyncTargetDelay                   int64    `config:"incr_sync.target_delay"`
 	IncrSyncWorkerBatchQueueSize          uint64   `config:"incr_sync.worker.batch_queue_size"`
 	IncrSyncAdaptiveBatchingMaxSize       int      `config:"incr_sync.adaptive.batching_max_size"`
