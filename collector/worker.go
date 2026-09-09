@@ -18,6 +18,8 @@ import (
 const MaxUnAckListLength = 128 * 256
 
 type Worker struct {
+	// Counts whole worker messages, including duplicate/equal-timestamp events.
+	pendingKafkaBatches int64
 	// parent syncer
 	syncer *OplogSyncer
 
@@ -85,6 +87,9 @@ func (worker *Worker) AllAcked(allAcked bool) {
 
 func (worker *Worker) Offer(batch []*oplog.GenericOplog) {
 	if batch != nil {
+		if conf.Options.KafkaAcknowledged {
+			atomic.AddInt64(&worker.pendingKafkaBatches, 1)
+		}
 		atomic.StoreInt64(&worker.unack, utils.TimeStampToInt64(batch[len(batch)-1].Parsed.Timestamp))
 	}
 	worker.queue <- batch
@@ -213,6 +218,12 @@ func (worker *Worker) transfer(batch []*oplog.GenericOplog) {
 			// a non-retransmission message
 			worker.retransmit = true
 
+		case replyAndAcked == tunnel.ReplyFenced:
+			// The new Kafka writer will never resend an ambiguous batch. Keep
+			// this worker blocked with its original unacknowledged interval.
+			worker.syncer.replMetric.ReplStatus.Update(utils.TunnelSendBad)
+			time.Sleep(time.Second)
+
 		default:
 			LOG.Warn("%s transfer oplogs failed with reply value %d", worker, replyAndAcked)
 			// we treat batched logs fail as just one time failed. and
@@ -221,6 +232,9 @@ func (worker *Worker) transfer(batch []*oplog.GenericOplog) {
 			//worker.retransmit = true
 			worker.syncer.replMetric.ReplStatus.Update(utils.TunnelSendBad)
 		}
+	}
+	if conf.Options.KafkaAcknowledged {
+		atomic.AddInt64(&worker.pendingKafkaBatches, -1)
 	}
 }
 
@@ -253,22 +267,32 @@ func (worker *Worker) purgeACK() {
 
 func (worker *Worker) RestAPI() {
 	type WorkerInfo struct {
-		Id              uint32 `json:"worker_id"`
-		JobsQueued      int    `json:"jobs_in_queue"`
-		JobsUnACKBuffer int    `json:"jobs_unack_buffer"`
-		LastUnACK       string `json:"last_unack"`
-		LastACK         string `json:"last_ack"`
-		COUNT           uint64 `json:"count"`
+		Id                  uint32                      `json:"worker_id"`
+		JobsQueued          int                         `json:"jobs_in_queue"`
+		JobsUnACKBuffer     int                         `json:"jobs_unack_buffer"`
+		LastUnACK           string                      `json:"last_unack"`
+		LastACK             string                      `json:"last_ack"`
+		COUNT               uint64                      `json:"count"`
+		KafkaDelivery       *tunnel.KafkaDeliveryStatus `json:"kafka_delivery,omitempty"`
+		PendingKafkaBatches int64                       `json:"pending_kafka_batches,omitempty"`
 	}
 
 	utils.IncrSyncHttpApi.RegisterAPI("/worker", nimo.HttpGet, func([]byte) interface{} {
-		return &WorkerInfo{
-			Id:              worker.id,
-			JobsQueued:      len(worker.queue),
-			JobsUnACKBuffer: len(worker.listUnACK),
-			LastUnACK:       utils.Int64ToString(worker.unack),
-			LastACK:         utils.Int64ToString(worker.ack),
-			COUNT:           worker.count,
+		info := &WorkerInfo{
+			Id:                  worker.id,
+			JobsQueued:          len(worker.queue),
+			JobsUnACKBuffer:     len(worker.listUnACK),
+			LastUnACK:           utils.Int64ToString(worker.unack),
+			LastACK:             utils.Int64ToString(worker.ack),
+			COUNT:               worker.count,
+			PendingKafkaBatches: atomic.LoadInt64(&worker.pendingKafkaBatches),
 		}
+		if worker.writeController != nil {
+			if writer, ok := worker.writeController.tunnel.(*tunnel.AcknowledgedKafkaWriter); ok {
+				status := writer.DeliveryStatus()
+				info.KafkaDelivery = &status
+			}
+		}
+		return info
 	})
 }

@@ -85,6 +85,10 @@ func (controller *WriteController) installModules() bool {
 }
 
 func (controller *WriteController) Send(logs []*oplog.GenericOplog, tag uint32) int64 {
+	if writer, ok := controller.tunnel.(interface{ Fenced() bool }); ok && writer.Fenced() {
+		// Avoid re-encoding a potentially large failed batch on every worker poll.
+		return tunnel.ReplyFenced
+	}
 	// all tunnel message which contain empty logs will be considered as
 	// probe message. Include real probe to get ack from remote server
 	// or a normal message doesn't have logs (which submit by retransmission)

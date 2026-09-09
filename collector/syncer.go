@@ -278,7 +278,11 @@ func (sync *OplogSyncer) startBatcher() {
 
 			// flush checkpoint value
 			sync.checkpoint(true, 0)
-			sync.checkCheckpointUpdate(true, newestTs) // check if need
+			if conf.Options.KafkaAcknowledged {
+				sync.drainAcknowledgedCheckpoint(newestTs)
+			} else {
+				sync.checkCheckpointUpdate(true, newestTs)
+			}
 			sync.CanClose = true
 			LOG.Info("%s blocking and waiting exits, checkpoint: %v", sync, utils.ExtractTimestampForLog(newestTs))
 			select {} // block forever, wait outer routine exits

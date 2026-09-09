@@ -35,6 +35,13 @@ func SanitizeOptions() error {
 	if err := checkDefaultValue(); err != nil {
 		return err
 	}
+	// Reject an unsafe opt-in combination before opening any database connection.
+	if conf.Options.TunnelKafkaPartitionNumber == 0 {
+		conf.Options.TunnelKafkaPartitionNumber = 1
+	}
+	if err := conf.Options.NormalizeKafkaDelivery(); err != nil {
+		return err
+	}
 
 	// check connection
 	if err := checkConnection(); err != nil {

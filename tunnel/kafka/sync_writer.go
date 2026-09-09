@@ -1,6 +1,7 @@
 package kafka
 
 import (
+	"fmt"
 	"strconv"
 	"time"
 
@@ -45,6 +46,45 @@ func (s *SyncWriter) Start() error {
 	s.producer = producer
 	return nil
 }
+
+// NewAcknowledgedSyncWriter preserves the existing payload limit and manual
+// partition mapping. The 0.11 wire protocol enables idempotence on Kafka 3.6.
+func NewAcknowledgedSyncWriter(rootCaFile, address string, partitionId, maxMessages int, flush time.Duration) (*SyncWriter, error) {
+	if maxMessages < 1 || maxMessages > 1024 || flush < 0 || maxMessages > 1 && flush == 0 {
+		return nil, fmt.Errorf("invalid acknowledged Kafka batch count or flush interval")
+	}
+	s, err := NewSyncWriter(rootCaFile, address, partitionId)
+	if err != nil {
+		return nil, err
+	}
+	c := s.config.Config
+	c.Version = sarama.V0_11_0_0
+	c.Producer.Idempotent = true
+	c.Producer.RequiredAcks = sarama.WaitForAll
+	c.Net.MaxOpenRequests = 1
+	c.Producer.Retry.Max = 3
+	c.Producer.Flush.Messages = maxMessages
+	c.Producer.Flush.MaxMessages = maxMessages
+	c.Producer.Flush.Frequency = flush
+	if err := c.Validate(); err != nil {
+		return nil, err
+	}
+	return s, nil
+}
+
+func (s *SyncWriter) WriteBatch(inputs [][]byte) error {
+	batch := make([]*sarama.ProducerMessage, len(inputs))
+	for i, input := range inputs {
+		batch[i] = &sarama.ProducerMessage{
+			Topic: s.topic, Partition: s.partition,
+			Key:   sarama.ByteEncoder(strconv.FormatInt(time.Now().UnixNano(), 16)),
+			Value: sarama.ByteEncoder(input),
+		}
+	}
+	return s.producer.SendMessages(batch)
+}
+
+func (s *SyncWriter) MaxMessageBytes() int { return s.config.Config.Producer.MaxMessageBytes }
 
 func (s *SyncWriter) SimpleWrite(input []byte) error {
 	return s.send(input)
