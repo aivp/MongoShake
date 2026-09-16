@@ -1,5 +1,10 @@
 # Critical-only release scope
 
+The scope below records the 2026-09-09 release. The separate
+`codex-critical-kafka-recovery` candidate starts at `ea1175ba` and is described in
+[RECOVERY-20260916.md](RECOVERY-20260916.md). It is not a deployment or an extension
+of the earlier release approval.
+
 ## Decision recorded on 2026-09-09
 
 Target: Hangcha domestic Tencent production, namespace `smartlink`.

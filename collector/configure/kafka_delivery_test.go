@@ -19,6 +19,9 @@ func TestCriticalDeliveryConfig(t *testing.T) {
 	if err := c.NormalizeKafkaDelivery(); err != nil || c.KafkaBatchMaxMessages != 128 || c.KafkaBatchMaxBytes != 524288 || c.KafkaBatchFlushMS != 5 || c.KafkaBatchEnabled {
 		t.Fatalf("defaults=%+v err=%v", c, err)
 	}
+	if c.KafkaSendTimeoutMS != 120000 || c.TunnelKafkaVersion != "0.11.0.0" || c.KafkaProducerMaxMessage != 0 {
+		t.Fatalf("recovery defaults=%+v", c)
+	}
 	legacy := Configuration{}
 	if err := legacy.NormalizeKafkaDelivery(); err != nil || legacy.KafkaAcknowledged || legacy.KafkaBatchMaxMessages != 0 {
 		t.Fatalf("legacy defaults changed: %+v, %v", legacy, err)
@@ -41,6 +44,11 @@ func TestCriticalDeliveryConfig(t *testing.T) {
 		func(c *Configuration) { c.KafkaBatchMaxBytes = 33554433 },
 		func(c *Configuration) { c.KafkaBatchFlushMS = 1001 },
 		func(c *Configuration) { c.TunnelJsonFormat = "unknown" },
+		func(c *Configuration) { c.KafkaSendTimeoutMS = -1 },
+		func(c *Configuration) { c.KafkaSendTimeoutMS = 999 },
+		func(c *Configuration) { c.KafkaSendTimeoutMS = 600001 },
+		func(c *Configuration) { c.KafkaProducerMaxMessage = -1 },
+		func(c *Configuration) { c.KafkaProducerMaxMessage = 18*1024*1024 + 1 },
 	} {
 		c := criticalDeliveryConfig()
 		mutate(&c)
@@ -63,5 +71,8 @@ func TestCriticalDeliveryConfigLoader(t *testing.T) {
 	}
 	if !c.KafkaAcknowledged || c.KafkaBatchEnabled || c.KafkaBatchMaxMessages != 128 || c.KafkaBatchMaxBytes != 524288 || c.KafkaBatchFlushMS != 5 {
 		t.Fatalf("config not loaded: %+v", c)
+	}
+	if c.KafkaSendTimeoutMS != 120000 || c.TunnelKafkaVersion != "0.11.0.0" || c.KafkaProducerMaxMessage != 0 {
+		t.Fatalf("recovery config not loaded: %+v", c)
 	}
 }

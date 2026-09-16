@@ -31,6 +31,8 @@ type Configuration struct {
 	TunnelAddress                          []string `config:"tunnel.address"`
 	TunnelMessage                          string   `config:"tunnel.message"`
 	TunnelKafkaPartitionNumber             int      `config:"tunnel.kafka.partition_number"` // add v2.4.21
+	TunnelKafkaVersion                     string   `config:"tunnel.kafka.version"`
+	KafkaProducerMaxMessage                int      `config:"tunnel.kafka.producer.max_message_bytes"`
 	TunnelJsonFormat                       string   `config:"tunnel.json.format"`
 	TunnelMongoSslRootCaFile               string   `config:"tunnel.mongo_ssl_root_ca_file"` // add v2.6.2
 	FilterNamespaceBlack                   []string `config:"filter.namespace.black"`
@@ -76,6 +78,7 @@ type Configuration struct {
 	KafkaBatchMaxMessages                 int      `config:"incr_sync.tunnel.kafka.batch.max_messages"`
 	KafkaBatchMaxBytes                    int      `config:"incr_sync.tunnel.kafka.batch.max_bytes"`
 	KafkaBatchFlushMS                     int      `config:"incr_sync.tunnel.kafka.batch.flush_ms"`
+	KafkaSendTimeoutMS                    int      `config:"incr_sync.tunnel.kafka.send_timeout_ms"`
 	IncrSyncTargetDelay                   int64    `config:"incr_sync.target_delay"`
 	IncrSyncWorkerBatchQueueSize          uint64   `config:"incr_sync.worker.batch_queue_size"`
 	IncrSyncAdaptiveBatchingMaxSize       int      `config:"incr_sync.adaptive.batching_max_size"`

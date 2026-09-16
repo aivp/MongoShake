@@ -10,6 +10,14 @@ incr_sync.tunnel.kafka.batch.max_messages = 128
 incr_sync.tunnel.kafka.batch.max_bytes = 524288
 incr_sync.tunnel.kafka.batch.flush_ms = 5
 
+# Recovery candidate only. These defaults preserve the existing wire protocol
+# and 18 MiB producer limit; the broker/topic may enforce a smaller record limit.
+tunnel.kafka.version = 0.11.0.0
+tunnel.kafka.producer.max_message_bytes = 0
+incr_sync.tunnel.kafka.send_timeout_ms = 120000
+# A failed/uncertain batch stops this process (75 retryable, 78 permanent/unknown).
+# Restart from the existing checkpoint can replay already accepted records.
+
 # Required existing topology: tunnel=kafka, tunnel.message=json, sync_mode=incr,
 # one Mongo source, oplog fetching, incr_sync.worker=1,
 # incr_sync.tunnel.write_thread=1 and tunnel.kafka.partition_number=1.
