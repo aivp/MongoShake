@@ -190,6 +190,11 @@ func (worker *Worker) transfer(batch []*oplog.GenericOplog) {
 			tag = tunnel.MsgNormal
 		}
 		replyAndAcked := worker.writeController.Send(logs, tag)
+		if replyAndAcked == tunnel.ReplyFenced {
+			worker.syncer.replMetric.ReplStatus.Update(utils.TunnelSendBad)
+			worker.exitFencedKafka()
+			return
+		}
 
 		LOG.Info("%s transfer retransmit:%t send [%d] logs. reply_acked [%v], list_unack [%d] ",
 			worker, worker.retransmit, len(logs), utils.ExtractTimestampForLog(replyAndAcked), len(worker.listUnACK))
@@ -218,12 +223,6 @@ func (worker *Worker) transfer(batch []*oplog.GenericOplog) {
 			// a non-retransmission message
 			worker.retransmit = true
 
-		case replyAndAcked == tunnel.ReplyFenced:
-			// The new Kafka writer will never resend an ambiguous batch. Keep
-			// this worker blocked with its original unacknowledged interval.
-			worker.syncer.replMetric.ReplStatus.Update(utils.TunnelSendBad)
-			time.Sleep(time.Second)
-
 		default:
 			LOG.Warn("%s transfer oplogs failed with reply value %d", worker, replyAndAcked)
 			// we treat batched logs fail as just one time failed. and
@@ -239,7 +238,13 @@ func (worker *Worker) transfer(batch []*oplog.GenericOplog) {
 }
 
 func (worker *Worker) probe() {
-	if replyAcked := worker.writeController.Send([]*oplog.GenericOplog{}, tunnel.MsgProbe); replyAcked > 0 {
+	replyAcked := worker.writeController.Send([]*oplog.GenericOplog{}, tunnel.MsgProbe)
+	if replyAcked == tunnel.ReplyFenced {
+		worker.syncer.replMetric.ReplStatus.Update(utils.TunnelSendBad)
+		worker.exitFencedKafka()
+		return
+	}
+	if replyAcked > 0 {
 		// only change ack offset on reply is OK
 		worker.syncer.replMetric.SetLSNACK(replyAcked)
 		atomic.StoreInt64(&worker.ack, replyAcked)

@@ -48,5 +48,22 @@ func (c *Configuration) NormalizeKafkaDelivery() error {
 	if c.KafkaBatchFlushMS < 1 || c.KafkaBatchFlushMS > 1000 {
 		return fmt.Errorf("Kafka batch.flush_ms must be between 1 and 1000")
 	}
+	return c.NormalizeKafkaRecovery()
+}
+
+// NormalizeKafkaRecovery also supports constructing a producer without a collector.
+func (c *Configuration) NormalizeKafkaRecovery() error {
+	if c.TunnelKafkaVersion == "" {
+		c.TunnelKafkaVersion = "0.11.0.0"
+	}
+	if c.KafkaSendTimeoutMS == 0 {
+		c.KafkaSendTimeoutMS = 120000
+	}
+	if c.KafkaSendTimeoutMS < 1000 || c.KafkaSendTimeoutMS > 600000 {
+		return fmt.Errorf("Kafka send_timeout_ms must be between 1000 and 600000")
+	}
+	if c.KafkaProducerMaxMessage < 0 || c.KafkaProducerMaxMessage > 18*1024*1024 {
+		return fmt.Errorf("Kafka producer.max_message_bytes must be between 0 and 18874368; 0 preserves the existing limit")
+	}
 	return nil
 }

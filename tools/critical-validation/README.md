@@ -1,5 +1,9 @@
 # Critical Kafka Validation - 2026-09-09
 
+For the 2026-09-16 recovery patch, changed dependency/toolchain requirements and
+current local verification, see [RECOVERY-20260916.md](RECOVERY-20260916.md).
+The results below describe the earlier candidate, not the recovery candidate.
+
 ## Scope and status
 
 Target: Hangcha domestic production, namespace `smartlink`, critical MongoShake

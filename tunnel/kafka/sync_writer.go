@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/Shopify/sarama"
+	conf "github.com/alibaba/MongoShake/v2/collector/configure"
 )
 
 type SyncWriter struct {
@@ -47,8 +48,7 @@ func (s *SyncWriter) Start() error {
 	return nil
 }
 
-// NewAcknowledgedSyncWriter preserves the existing payload limit and manual
-// partition mapping. The 0.11 wire protocol enables idempotence on Kafka 3.6.
+// NewAcknowledgedSyncWriter leaves the legacy producer contract unchanged.
 func NewAcknowledgedSyncWriter(rootCaFile, address string, partitionId, maxMessages int, flush time.Duration) (*SyncWriter, error) {
 	if maxMessages < 1 || maxMessages > 1024 || flush < 0 || maxMessages > 1 && flush == 0 {
 		return nil, fmt.Errorf("invalid acknowledged Kafka batch count or flush interval")
@@ -57,12 +57,29 @@ func NewAcknowledgedSyncWriter(rootCaFile, address string, partitionId, maxMessa
 	if err != nil {
 		return nil, err
 	}
+	options := conf.Options
+	if err := options.NormalizeKafkaRecovery(); err != nil {
+		return nil, err
+	}
+	version, err := sarama.ParseKafkaVersion(options.TunnelKafkaVersion)
+	if err != nil || !version.IsAtLeast(sarama.V0_11_0_0) {
+		return nil, fmt.Errorf("acknowledged Kafka requires a supported tunnel.kafka.version >= 0.11.0.0")
+	}
 	c := s.config.Config
-	c.Version = sarama.V0_11_0_0
+	c.Version = version
 	c.Producer.Idempotent = true
 	c.Producer.RequiredAcks = sarama.WaitForAll
 	c.Net.MaxOpenRequests = 1
-	c.Producer.Retry.Max = 3
+	c.Producer.Retry.Max = 10
+	c.Producer.Retry.Backoff = 500 * time.Millisecond
+	c.Metadata.RefreshFrequency = 3 * time.Minute
+	c.Metadata.Timeout = 10 * time.Second
+	c.Net.DialTimeout = 10 * time.Second
+	c.Net.ReadTimeout = 30 * time.Second
+	c.Net.WriteTimeout = 10 * time.Second
+	if options.KafkaProducerMaxMessage > 0 {
+		c.Producer.MaxMessageBytes = options.KafkaProducerMaxMessage
+	}
 	c.Producer.Flush.Messages = maxMessages
 	c.Producer.Flush.MaxMessages = maxMessages
 	c.Producer.Flush.Frequency = flush
